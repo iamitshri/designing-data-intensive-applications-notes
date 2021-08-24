@@ -1,2 +1,2 @@
 # designing-data-intensive-applications-notes
-Notes designing-data-intensive-applications 
+Notes on book Designing Data Intensive Applications 
