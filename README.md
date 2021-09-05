@@ -71,6 +71,7 @@ Notes on book Designing Data Intensive Applications
 
 ## Scalability
 - System's ability to cope with increased load  
+- In order to discuss scalability, we first need ways of describing load and performance quantitatively
 - Describe load in terms of parameters
   - load parameters for e.g.
     - request per second to web server 
