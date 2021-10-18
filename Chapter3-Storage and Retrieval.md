@@ -81,4 +81,83 @@
 
 #### Downsides of LSM-trees
 - A downside of log-structured storage is that the compaction process can sometimes interfere with the performance of ongoing reads and writes.
+- The impact of compaction and merging on throughput & response time is minimal but at higher percentiles the response time of queries to LSM storage engine can sometimes be quite high and B-trees can be more predictable
+- Disk has finite write bandwidth, it has to share it with write operations and thread handling compaction. When the DB is empty all bandwidth can be used for initial writes but as the size increases' compaction needs to be performed.
+  - If the rate of writes is higher than compaction can keep up with, number of unmerged segments keeps growing until disk run of space and reads become slower as they need to check more segments
+- An advantage of B-trees is that each key exists in exactly one place in the index, whereas a log-structured storage engine may have multiple copies of the same key in different segments
+- B-trees are very ingrained in the architecture of databases and provide consistently good performance for many workloads, so it’s unlikely that they will go away anytime soon. 
+- In new datastores, log-structured indexes are becoming increasingly popular. 
+- There is no quick and easy rule for determining which type of storage engine is better for your use case, so it is worth testing empirically.
+
+- Secondary index
+  - Secondary index in relational database speeds up the application query 
+  - Key is what client searches for and value is the actual row, document or vertex
+  - If the value is stored within the index, its called clustered index
+    - Clustered index speeds up reads, increase space requirements 
+    - Clustered index adds the additional overhead to provide transactional guarantees so application have the consistent view of data
+  - if the reference to value in heap(heapfile) is stored in the index then its non-clustered index
+  - A compromise between a clustered index (storing all row data within the index) and a nonclustered index (storing only references to the data within the index) is known as a covering index or index with included columns, which stores some of a table’s columns within the index. 
+    - This allows some queries to be answered by using the index alone (in which case, the index is said to cover the query)
+
+- Full-text Search
+  - To cope with typos in documents or queries, Lucene is able to search text for words within a certain edit distance (an edit distance of 1 means that one letter has been added, removed, or replaced)
+  - Lucene uses a SSTable-like structure for its term dictionary. This structure requires a small in-memory index that tells queries at which offset in the sorted file they need to look for a key. In LevelDB, this in-memory index is a sparse collection of some of the keys, but in Lucene, the in-memory index is a finite state automaton over the characters in the keys, similar to a trie [38]. This automaton can be transformed into a Levenshtein automaton, which supports efficient search for words within a given edit distance [39].
+
+- Keeping everything in memory
+  - Counterintuitively, the performance advantage of in-memory databases is not due to the fact that they don’t need to read from disk. 
+    - Even a disk-based storage engine may never need to read from disk if you have enough memory, because the operating system caches recently used disk blocks in memory anyway. 
+    - Rather, they can be faster because they **can avoid the overheads of encoding in-memory data structures** in a form that can be written to disk.
+  - Besides performance, another interesting area for in-memory databases is providing data models that are difficult to implement with disk-based indexes.
+
+#### Transaction Processing or Analytics?
+- In the early days of business data processing, a write to the database typically corresponded to a commercial transaction taking place: making a sale, placing an order with a supplier, paying an employee’s salary, etc. As databases expanded into areas that didn’t involve money changing hands, the term transaction nevertheless stuck, referring to a group of reads and writes that form a logical unit.
+- Typically, applications looks up few records by key using index. Records are inserted or updated based on the users input. Because these operations are interactive the access pattern became know as online transaction processing(OLTP)
+- Databases also started being increasingly used for data analytics, which has very different access patterns. 
+  - Usually an analytic query needs to scan over a huge number of records, only reading a few columns per record, and calculates aggregate statistics (such as count, sum, or average) rather than returning the raw data to the user
+  -  The meaning of online in OLAP is unclear; it probably refers to the fact that queries are not just for predefined reports, but that analysts use the OLAP system interactively for explorative queries.
+- ![img.png](images/txProcessingVsAnalyticSystems.png)
+
+- Data Warehouse
+  - A data warehouse, by contrast, is a separate database that analysts can query to their hearts’ content, without affecting OLTP operations [48]. The data warehouse contains a read-only copy of the data in all the various OLTP systems in the company. Data is extracted from OLTP databases (using either a periodic data dump or a continuous stream of updates), transformed into an analysis-friendly schema, cleaned up, and then loaded into the data warehouse. This process of getting data into the warehouse is known as Extract–Transform–Load (ETL)
+  - A big advantage of using a separate data warehouse, rather than querying OLTP systems directly for analytics, is that the data warehouse can be optimized for analytic access patterns
+  - On the surface, a data warehouse and a relational OLTP database look similar, because they both have a SQL query interface. However, the internals of the systems can look quite different, because they are optimized for very different query patterns. Many database vendors now focus on supporting either transaction processing or analytics workloads, but not both.
+  - Data warehouse vendors such as Teradata, Vertica, SAP HANA, and ParAccel typically sell their systems under expensive commercial licenses. Amazon RedShift is a hosted version of ParAccel. More recently, a plethora of open source SQL-on-Hadoop projects have emerged; they are young but aiming to compete with commercial data warehouse systems. These include Apache Hive, Spark SQL, Cloudera Impala, Facebook Presto, Apache Tajo, and Apache Drill [52, 53]. Some of them are based on ideas from Google’s Dremel [54].
+  - Start Schema
+    - The name “star schema” comes from the fact that when the table relationships are visualized, the fact table is in the middle, surrounded by its dimension tables; the connections to these tables are like the rays of a star.
+  - Snowflake Schema
+    - A variation of this template is known as the snowflake schema, where dimensions are further broken down into subdimensions.
+  - Snowflake schemas are more normalized than star schemas, but star schemas are often preferred because they are simpler for analysts to work with [55].
+  - In a typical data warehouse, tables are often very wide: fact tables often have over 100 columns, sometimes several hundred [51]. Dimension tables can also be very wide, as they include all the metadata that may be relevant for analysis—
+- Column Oriented Storage 
+  - In most OLTP databases, storage is laid out in a row-oriented fashion: all the values from one row of a table are stored next to each other. Document databases are similar: an entire document is typically stored as one contiguous sequence of bytes.
+  - The idea behind column-oriented storage is simple: don’t store all the values from one row together, but store all the values from each column together instead. If each column is stored in a separate file, a query only needs to read and parse those columns that are used in that query, which can save a lot of work
+  - COLUMN-ORIENTED STORAGE AND COLUMN FAMILIES 
+    - Cassandra and HBase have a concept of column families, which they inherited from Bigtable [9]. However, it is very misleading to call them column-oriented: within each column family, they store all columns from a row together, along with a row key, and they do not use column compression. Thus, the Bigtable model is still mostly row-oriented.
+- Aggregation: Data Cubes and Materialized Views
+  - A common special case of a materialized view is known as a data cube or OLAP cube [64]. 
+    - It is a grid of aggregates grouped by different dimensions. 
+    - Each cell contains the calculated info for a particular column combination. These values can then repeatedly be summarized along each of the dimensions.
+    - The advantage of a materialized data cube is that certain queries become very fast because they have effectively been precomputed
+    - The disadvantage is that a data cube doesn’t have the same flexibility as querying the raw data.
+    - Most data warehouses therefore try to keep as much raw data as possible, and use aggregates such as data cubes only as a performance boost for certain queries.
+
+#### Summary
+- In this chapter we tried to get to the bottom of how databases handle storage and retrieval. What happens when you store data in a database, and what does the database do when you query for the data again later?
+- On a high level, we saw that storage engines fall into two broad categories: those optimized for transaction processing (OLTP), and those optimized for analytics (OLAP). There are **big differences between the access patterns** in those use cases:
+- OLTP systems are typically user-facing, which means that they may see a huge volume of requests. In order to handle the load, applications usually only touch a small number of records in each query. The application requests records using some kind of key, and the storage engine uses an index to find the data for the requested key. **Disk seek time is often the bottleneck here**.
+- Data warehouses and similar analytic systems are less well known, because they are **primarily used by business analysts**, not by end users. They handle a much lower volume of queries than OLTP systems, but each **query is typically very demanding**, **requiring many millions of records to be scanned in a short time**. **Disk bandwidth (not seek time) is often the bottleneck here, and column-oriented storage is an increasingly popular solution for this kind of workload**.
+- On the OLTP side, we saw storage engines from **two main schools of thought**:
+- The _log-structured school_, which only permits **appending to files and deleting obsolete files**, but never updates a file that has been written. **Bitcask, SSTables, LSM-trees, LevelDB, Cassandra, HBase, Lucene, and others belong to this group**.
+- The _update-in-place_ school, which **treats the disk as a set of fixed-size pages that can be overwritten**. B-trees are the biggest example of this philosophy, being used in all major relational databases and also many nonrelational ones.
+- **Log-structured storage engines** are a **comparatively recent development**. Their key idea is that **they systematically turn random-access writes into sequential writes on disk**, which enables higher write throughput due to the performance characteristics of hard drives and SSDs.
+- Finishing off the OLTP side, we did a brief tour through some more complicated indexing structures, and databases that are optimized for keeping all data in memory.
+- We then took a detour from the internals of storage engines to look at the high-level architecture of a typical data warehouse. This background illustrated why analytic workloads are so different from OLTP: when your queries require sequentially scanning across a large number of rows, indexes are much less relevant. Instead it becomes important to encode data very compactly, to minimize the amount of data that the query needs to read from disk. We discussed how column-oriented storage helps achieve this goal.
+- As an application developer, if you’re armed with this knowledge about the internals of storage engines, you are in a much better position to know which tool is best suited for your particular application. If you need to adjust a database’s tuning parameters, this understanding allows you to imagine what effect a higher or a lower value may have.
+- Although this chapter couldn’t make you an expert in tuning any one particular storage engine, it has hopefully equipped you with enough vocabulary and ideas that you can make sense of the documentation for the database of your choice.
+
+
+
+
+
+
 
