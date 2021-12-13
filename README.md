@@ -10,3 +10,4 @@
 - [Chapter 3. Storage and Retrieval](Chapter3-Storage%20and%20Retrieval.md)
 - [Chapater 4.Encoding and Evoluation](Chapter4-Encoding%20and%20Evolution.md)
 - [Chapter 5. Replication](Chapter5-Replication.md)
+- [Chapter 6. Partition](Chapter6-Partitioning.md)
